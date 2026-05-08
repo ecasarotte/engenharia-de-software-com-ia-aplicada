@@ -1,0 +1,225 @@
+/**
+ * Pré-processa a imagem para o formato aceito pelo YOLO:
+ * - tf.browser.fromPixels(): converte ImageBitmap/ImageData para tensor [H, W, 3]
+ * - tf.image.resizeBilinear(): redimensiona para [INPUT_DIM, INPUT_DIM]
+ * - .div(255): normaliza os valores para [0, 1], inicialmente os valores vão de
+ *   0 a 255 (256 inteiros, valor maximo que um pixel pode ter de RGB) em cada pixel da imagem. 
+ * - .expandDims(0): adiciona dimensão batch [1, H, W, 3]
+ *
+ * Uso de tf.tidy():
+ * - Garante que tensores temporários serão descartados automaticamente,
+ *   evitando vazamento de memória.
+ * 
+ *  (semelhante ao using() do C#)
+ */
+
+ Fluxo desse Pré Processamento da imagem:
+
+ O método preProcessing recebe um input, esse input é a imagem printada pelo navegador e em formato
+ BitMap, a origem vem do canvas que tem tamanho 640x640 pixels.
+
+ O método fromPixels transforma essa imagem BitMap em um Tensor: [altura, largura, canais] = [640, 640, 3]
+
+ Cada pixel está em uma posição [altura][largura] e o canal (3), o numero de pixels de altura e Largura
+ definem a dimensão da imagem, e o canal são as cores RGB. 
+ R = índice 0
+ G = índice 1
+ B = índice 2.
+
+ Cada pixel é acessado por:
+ image[altura][largura] → [R, G, B]
+
+ Esses valores do RGB variam entre 256 numeros possíveis, vai de 0 a 255.
+ porém 255 é um numero muito grande, para isso é utilizada a função div(255) que vai dividir o valor do RGB
+ por 255, ou seja, normalizar entre 0 e 1.
+
+ Exemplo de Tensor de pixels em dimensão 2x2: 
+ A primeira dimensão = linhas (altura)
+ A segunda dimensão = colunas (largura)
+ A terceira dimensão = canais (RGB)
+
+image
+[
+      R   G  B      R    G   B
+  [ [255, 0, 0],   [0, 255, 0] ],     // linhas Altura (y)
+  [ [0, 0, 255],   [255, 255, 255] ]  // colunas largura (x)
+]
+
+após a aplicação do div(255): 
+image
+[
+      R   G  B      R    G   B
+  [ [1, 0, 0],   [0, 1, 0] ],     // linhas Altura (y)
+  [ [0, 0, 1],   [1, 1, 1] ]  // colunas largura (x)
+]
+
+image[0][0] → [255, 0, 0]     // canto superior esquerdo
+image[0][1] → [0, 255, 0]     // topo direita
+image[1][0] → [0, 0, 255]     // baixo esquerda
+image[1][1] → [255, 255, 255] // baixo direita
+
+O método resizeBilinear garante que a imagem fique no tamanho esperado pelo modelo 
+(ex: 640x640 do canvas), assim meu tensor vai ter sempre a representação de cada pixel da tela.
+
+O método expandDims(0) adiciona uma nova dimensão na posição 0, transformando:
+
+[H, W, C] → [1, H, W, C]
+
+Esse "1" é o batch size, quantas imagens vão ser processadas por vez (nesse caso 1).
+
+***********************************************************************************************
+
+async function runInference(tensor) {
+    const output = await _model.executeAsync(tensor); // retorno do modelo YOLO após o envio
+    // da imagem em formato de Tensor.
+    tf.dispose(tensor);
+
+
+    // Assume que as 3 primeiras saídas são:
+    // caixas (boxes), pontuações (scores) e classes
+    const [boxes, scores, classes] = output.slice(0, 3);
+    const [boxesData, scoresData, classesData] = await Promise.all([
+        boxes.data(),
+        scores.data(),
+        classes.data()
+    ]);
+
+    output.forEach(t => t.dispose());
+
+    return {
+        boxes: boxesData,
+        scores: scoresData,
+        classes: classesData
+    }
+}
+
+Essa função envia a imagem em formato de Tensor para o modelo YOLO e retorna os valores previstos
+
+Quando um modelo de detecção roda, ele responde basicamente:
+
+👉 “eu encontrei isso aqui nessa posição com tal confiança”
+
+Isso é dividido em 3 partes:
+
+📦 1. boxes (caixas)
+👉 Onde o objeto está na imagem
+
+Cada box normalmente tem 4 valores:
+[x, y, w, h]
+
+ou às vezes:
+[x1, y1, x2, y2]
+
+📌 Exemplo
+[320, 200, 100, 150]
+
+👉 significa:
+
+x = posição horizontal
+y = posição vertical
+w = largura
+h = altura
+
+🧠 Visual
++----------------------+
+|                      |
+|      [ OBJETO ]      |
+|                      |
++----------------------+
+
+👉 o box é literalmente o retângulo em volta
+
+🎯 2. scores (confiança)
+👉 Quão certo o modelo está
+
+Valor entre:
+0 → 1
+
+📌 Exemplo
+0.95 → 95% de confiança
+0.20 → 20% (provavelmente lixo)
+
+🎯 Uso típico
+if (score < 0.4) ignore
+👉 filtrar detecções ruins
+
+🏷️ 3. classes
+👉 Qual objeto foi detectado
+É um índice que aponta para seu array de labels:
+
+_labels = ["person", "car", "dog", ...]
+
+📌 Exemplo
+classes[index] = 2
+
+👉 significa:
+_labels[2] → "dog"
+
+
+
+Para cada detecção você tem algo assim:
+{
+  box: [320, 200, 100, 150],
+  score: 0.92,
+  class: 2
+}
+
+👉 traduzindo:
+"tem um cachorro aqui nessa posição com 92% de certeza"
+
+🧠 Como isso aparece em array
+boxes   = [b1, b2, b3, ...]
+scores  = [s1, s2, s3, ...]
+classes = [c1, c2, c3, ...]
+
+👉 mesmo índice corresponde:
+boxes[i], scores[i], classes[i]
+
+
+🔥 Exemplo real
+boxes   = [[10,10,50,50], [100,100,80,80]]
+scores  = [0.9, 0.3]
+classes = [0, 2]
+
+Resultado:
+Objeto: _labels[0]
+Confiança: 0.9
+Posição: [10,10,50,50]
+
+Objeto: _labels[2]
+Confiança: 0.3 (provavelmente ignorar)
+
+Nesse modelo YOLO, boxes está sendo retornado normalizado entre 0 e 1, por isso é necessário multiplicar pelas dimensões
+da tela.
+
+boxes é retornado inicialmente dentro de um unico array onde cada index é uma posição da caixa(box) sendo x1, x2, y1, y2:
+📌 Exemplo real
+x1 = 100
+y1 = 50
+
+x2 = 300
+y2 = 200
+
+A caixa começa em:
+x=100
+y=50
+
+E termina em:
+x=300
+y=200
+
+🧠 Visualmente
+
+ x1   y1
+(100,50)
+     ┌──────────────────┐
+     │                  │
+     │      objeto      │
+     │                  │
+     └──────────────────┘
+                    (300,200)
+                     x2  y2
+
+o Array de boxes tem sempre 400 posições nesse modelo, separadas sempre de 4 em 4 para definir cada box identificada. Por esse motivo
+utilizamos o método slice para pegar sempre 4 valores do array de acordo com o index, esses 4 valores definem a posição e 
+o tamanhoda das boxes.
