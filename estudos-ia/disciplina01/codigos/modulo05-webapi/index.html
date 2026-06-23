@@ -1,0 +1,72 @@
+<output id="output"></output>
+<!-- https://www.jsdelivr.com/package/npm/markdown -->
+<script src="https://cdn.jsdelivr.net/npm/markdown@0.5.0/lib/markdown.min.js"></script>
+
+<script>
+    const output = document.getElementById('output');
+
+    // console.log(LanguageModel);
+    // console.log(Object.getOwnPropertyNames(LanguageModel));
+    // console.log(Object.getOwnPropertyNames(LanguageModel.prototype));
+    // console.dir(LanguageModel);
+
+    // (async () => {
+    //     const params = await LanguageModel.params();
+    //     console.log(params);
+    // })();
+
+    (async () => {
+
+        const availability = await LanguageModel.availability();
+
+        console.log("Disponibilidade:", availability);
+
+        if (availability !== "available") {
+            console.log("Modelo não disponível");
+            return;
+        }
+
+        try {
+            const temperature = 999;
+            const topK = 5;
+
+            const initialPrompts = [
+                {
+                    role: 'system',
+                    content: `Você é um assistente que responde dúvidas sobre tecnologia e
+                     programação, de forma clara e objetiva.`
+                }
+            ];
+
+            const question = 'Quem inventou o Angular?';
+
+            // o session precisa ser recriado caso os valores de temperature e topK sejam alterados.
+            const session = await LanguageModel.create({
+                outputLanguage: "pt-BR",
+                temperature,
+                topK,
+                initialPrompts,
+            });
+
+            const response = await session.promptStreaming(question);
+
+            console.log(response);
+            
+            output.innerHTML = '';
+            let fullText = '';
+
+            for await(const token of response){
+                fullText += token;
+                output.innerHTML = markdown.toHTML(fullText);
+
+                // console.log(token);
+            }
+
+        } catch (error) {
+            console.log(error);
+        }
+
+    })();
+
+
+</script>

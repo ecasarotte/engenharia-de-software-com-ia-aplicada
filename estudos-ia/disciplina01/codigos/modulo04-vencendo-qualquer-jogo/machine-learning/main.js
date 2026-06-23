@@ -27,7 +27,7 @@ export default async function main(game) {
 
     setInterval(async () => {
         const canvas = game.app.renderer.extract.canvas(game.stage);
-        const bitmap = await createImageBitmap(canvas); // Cria um print em firmato BitMap
+        const bitmap = await createImageBitmap(canvas); // Cria um print em formato BitMap
 
         worker.postMessage({
             type: 'predict',
