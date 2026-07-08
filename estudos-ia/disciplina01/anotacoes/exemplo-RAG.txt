@@ -1,0 +1,22 @@
+Na primeira aula onde é feito um projeto de exemplo de RAG, é realizado apenas o processo 
+de separar os parágrafos do PDF (chunks), transformar esses parágrafos em embeddings (Arrays de numeros)
+e popular o banco de dados do NEO4J com esses embeddings.
+
+A partir das perguntas feitas pelo usuário (nesse caso guardadas no array questions), é feito uma busca por similaridade
+atravez do neo4jVectorStore para comparar o embedding da pergunta com os embeddingsde parágrafos, 
+e trazer os top-K mais importantes.
+
+
+
+Na segunda etapa, o RAG acontece de fato, após o retorno do neo4jVectorStore trazendo os paragrafos com maior similaridade, 
+esses parágrafos são passados como contexto em um template para um prompt de IA. é criado com o apoio do LangChain uma Pipeline
+que recebe a pergunta do usuário + contexto encontrado no neo4jVectorStore e inseridos no template, faz uma chamada a API
+do OpenRouter para o modelo específico que configurei na minha constante CONFIG executando o prompt, aguarda a resposta e
+transforma essa resposta em String.
+
+O ChatPromptTemplate.fromTemplate() apenas cria um objeto de template, armazenando o texto e identificando as variáveis delimitadas 
+por {}. O método pipe() não executa nenhuma lógica; ele apenas conecta os componentes da pipeline na ordem em que serão executados. 
+A execução só começa quando invoke() é chamado. Primeiro, o ChatPromptTemplate recebe o objeto de entrada e substitui as variáveis do template, 
+gerando o prompt final. Em seguida, esse prompt é enviado ao ChatOpenAI.invoke(), que monta uma requisição HTTP POST para a API do modelo 
+de IA (OpenAI, OpenRouter, etc.) e aguarda a resposta. A resposta é retornada como um objeto AIMessage. 
+Por fim, o StringOutputParser extrai apenas o conteúdo textual desse objeto, retornando uma string com a resposta final do modelo.
