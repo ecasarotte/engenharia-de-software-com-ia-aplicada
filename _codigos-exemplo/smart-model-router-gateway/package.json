@@ -1,0 +1,20 @@
+{
+  "name": "smart-model-router-gateway",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch --env-file .env --inspect src/index.ts",
+    "test:dev": "node --watch --env-file .env --inspect --test ./tests/**/*.test.ts",
+    "test": "node --env-file .env --test ./tests/**/*.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@openrouter/sdk": "^0.5.1",
+    "@types/node": "^24.13.3",
+    "fastify": "^5.7.4"
+  }
+}
